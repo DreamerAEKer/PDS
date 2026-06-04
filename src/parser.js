@@ -22,11 +22,11 @@ export async function parseExcel(file) {
                     const row = json[i];
                     for (let j = 0; j < row.length; j++) {
                         const cell = String(row[j] || '').toLowerCase();
-                        if (cell.includes('เลขที่ลงทะเบียน') || cell.includes('tracking') || cell.includes('เลขพัสดุ')) {
+                        if (cell.includes('เลขที่ลงทะเบียน') || cell.includes('tracking') || cell.includes('เลขพัสดุ') || cell.includes('บาร์โค')) {
                             trackingColIdx = j;
                             headerRowIdx = i;
                         }
-                        if (cell.includes('ค่าบริการ') || cell.includes('price') || cell.includes('ค่าส่ง')) {
+                        if (cell.includes('ค่าบริการ') || cell.includes('price') || cell.includes('ค่าส่ง') || cell.includes('ราคา')) {
                             feeColIdx = j;
                         }
                     }
