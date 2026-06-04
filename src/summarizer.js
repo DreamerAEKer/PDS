@@ -100,7 +100,12 @@ export function summarizeData(rawData) {
             
             let displayStr = consumeCount === 1 ? startStr : `${startStr} ถึง ${endStr}`;
             
-            resultLines.push(`${displayStr}\nจำนวน ${consumeCount} ชิ้น*${currentBucket.fee} บาท เป็นเงิน ${(consumeCount * currentBucket.fee).toLocaleString()} บาท`);
+            resultLines.push({
+                displayStr: displayStr,
+                consumeCount: consumeCount,
+                fee: currentBucket.fee,
+                amount: consumeCount * currentBucket.fee
+            });
 
             totalItemsFinal += consumeCount;
             totalPriceFinal += (consumeCount * currentBucket.fee);

@@ -101,7 +101,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const summary = summarizeData(rawDataState);
         
         const contentDiv = document.getElementById('summary-content');
-        contentDiv.textContent = summary.lines.join('\n');
+        contentDiv.innerHTML = '';
+        
+        let plainTextArr = [];
+
+        summary.lines.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'summary-item';
+            row.innerHTML = `
+                <div class="summary-tracking">${item.displayStr}</div>
+                <div class="summary-details">
+                    <span class="badge">จำนวน ${item.consumeCount} ชิ้น</span>
+                    <span class="badge fee-badge">@ ${item.fee} บาท</span>
+                    <span class="amount">เป็นเงิน <strong>${item.amount.toLocaleString()}</strong> บาท</span>
+                </div>
+            `;
+            contentDiv.appendChild(row);
+            plainTextArr.push(`${item.displayStr}\nจำนวน ${item.consumeCount} ชิ้น*${item.fee} บาท เป็นเงิน ${item.amount.toLocaleString()} บาท`);
+        });
+        
+        contentDiv.dataset.plainText = plainTextArr.join('\n');
         
         document.getElementById('total-items').textContent = `${summary.totalItems} ชิ้น`;
         document.getElementById('total-price').textContent = `${summary.totalPrice.toLocaleString()} บาท`;
@@ -113,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('btn-copy').addEventListener('click', () => {
-        const text = document.getElementById('summary-content').textContent;
+        const text = document.getElementById('summary-content').dataset.plainText;
         navigator.clipboard.writeText(text).then(() => {
             alert('คัดลอกสำเร็จแล้ว!');
         });
