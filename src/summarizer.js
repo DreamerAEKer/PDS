@@ -1,18 +1,24 @@
 // summarizer.js
 
-// ฟังก์ชันดึง Prefix และ Number
+function formatTracking(tracking) {
+    if (tracking.length === 13) {
+        return `${tracking.substring(0,2)} ${tracking.substring(2,6)} ${tracking.substring(6,10)} ${tracking.substring(10,11)} ${tracking.substring(11,13)}`;
+    }
+    return tracking;
+}
+
 function splitTracking(tracking) {
-    const match = tracking.match(/^([A-Z]{2})(\d{9})(TH)?$/i);
+    // แยก 8 หลักที่เป็น sequence และ 1 หลักที่เป็น check digit
+    const match = tracking.match(/^([A-Z]{2})(\d{8})(\d)(TH)?$/i);
     if (!match) return null;
     return {
         prefix: match[1].toUpperCase(),
-        numStr: match[2],
-        num: parseInt(match[2], 10),
-        suffix: match[3] ? match[3].toUpperCase() : 'TH'
+        seq: parseInt(match[2], 10),
+        checkDigit: match[3],
+        suffix: match[4] ? match[4].toUpperCase() : 'TH'
     };
 }
 
-// ฟังก์ชันจัดกลุ่มเลขที่เรียงกัน
 function groupTracking(items) {
     const groups = [];
     if (items.length === 0) return groups;
@@ -23,7 +29,8 @@ function groupTracking(items) {
         const prev = splitTracking(items[i-1].tracking);
         const curr = splitTracking(items[i].tracking);
 
-        if (prev && curr && prev.prefix === curr.prefix && curr.num === prev.num + 1) {
+        // จัดกลุ่มถ้า Prefix เดียวกัน และเลข 8 หลัก (Sequence) เรียงต่อกัน
+        if (prev && curr && prev.prefix === curr.prefix && curr.seq === prev.seq + 1) {
             currentGroup.push(items[i]);
         } else {
             groups.push(currentGroup);
@@ -34,31 +41,16 @@ function groupTracking(items) {
     return groups;
 }
 
-// AR Logic checker
-// ตรวจสอบว่าบริการนี้ใช้ AR Track หรือไม่
 function isArService(prefix, fee) {
-    // เรทราคาตอบรับมักจะมีลักษณะเฉพาะ เช่น EMS ตอบรับ, ลทบ ตอบรับ
-    // สมมติว่า เรทตอบรับ EMS = 52, 67, ... (ตัวอย่าง)
-    // ตรงนี้สามารถเชื่อมกับฐานข้อมูลจริงจาก TPB ได้
-    // ในที่นี้ ถ้าเป็นบริการตอบรับ เรามักจะเจอราคาเฉพาะ เช่น 52, 67, หรือมีคีย์ AR
-    // แต่เพื่อความยืดหยุ่นในเดโม จะอนุญาตให้ผู้ใช้กำหนด Flag หรือเช็คจากตรรกะง่ายๆ
-    
-    // ตัวอย่างเงื่อนไข: หากขึ้นต้นด้วย E หรือ R และราคาเป็นราคารวม AR (อันนี้ต้องปรับตามจริง)
-    // ในบริบทนี้ สมมติถ้า fee == 52 (อิงจากโจทย์) ถือว่าเป็น AR
-    // จริงๆ ควรดึงจาก DB
-    if ((prefix === 'E' || prefix === 'R') && (fee === 52 || fee === 60)) {
+    // สมมติว่า เรทตอบรับ EMS = 52, 67, ... (ตัวอย่าง) หรืออิงจาก prefix
+    // ในที่นี้ สมมติถ้า fee เฉพาะของบริการ AR
+    if ((prefix.startsWith('E') || prefix.startsWith('R')) && (fee === 52 || fee === 60)) {
         return true;
     }
     return false;
 }
 
 export function summarizeData(rawData) {
-    // 1. นำข้อมูลดิบมาแยกเป็น Tracking Blocks
-    // เนื่องจากโจทย์บอกว่าข้อมูล Tracking อาจจะเรียงอยู่แล้ว ให้จัดกลุ่มเลย
-    // rawData ควรเป็น Array ของ Object: { tracking: "EQ687878780TH", fee: 40, isAr: false }
-    
-    // สร้างถังราคา (Price Buckets) เรียงลำดับตามความสวยงาม (น้อยไปมาก หรือมากไปน้อย)
-    // สำหรับเดโม เรียงตามจำนวนชิ้นเยอะสุดไปน้อยสุดก่อน
     const priceCounts = {};
     rawData.forEach(item => {
         const f = parseFloat(item.fee) || 0;
@@ -67,57 +59,57 @@ export function summarizeData(rawData) {
 
     const priceBuckets = Object.keys(priceCounts)
         .map(p => ({ fee: parseFloat(p), count: priceCounts[p] }))
-        .sort((a, b) => b.count - a.count); // จัดเรียงตามจำนวนเยอะสุดไปน้อยสุด
+        .sort((a, b) => b.count - a.count);
 
-    // จัดกลุ่ม Tracking ที่มีอยู่
     const trackingGroups = groupTracking(rawData);
 
     const resultLines = [];
     let totalItemsFinal = 0;
     let totalPriceFinal = 0;
 
-    // The Zipper Algorithm (เทน้ำใส่แก้ว)
     for (const group of trackingGroups) {
         if (group.length === 0) continue;
         
-        const firstTrackingParts = splitTracking(group[0].tracking);
-        if (!firstTrackingParts) continue; // ข้ามถ้า format ผิด
+        let trackingIndex = 0;
 
-        let groupRemaining = group.length;
-        let trackingStartNum = firstTrackingParts.num;
-
-        while (groupRemaining > 0 && priceBuckets.length > 0) {
-            // เอาถังราคาที่อยู่บนสุดมาใช้
+        while (trackingIndex < group.length && priceBuckets.length > 0) {
             let currentBucket = priceBuckets[0];
+            let remainingInGroup = group.length - trackingIndex;
             
-            // ใช้จำนวนเท่าที่ถังราคาเหลือ หรือเท่าที่กลุ่ม Tracking ขาด
-            let consumeCount = Math.min(groupRemaining, currentBucket.count);
-
-            // คำนวณเลข Tracking ปลายทาง
-            let isAR = isArService(firstTrackingParts.prefix[0], currentBucket.fee);
-            let trackingSlotsConsumed = isAR ? consumeCount * 2 : consumeCount;
-
-            let endNum = trackingStartNum + trackingSlotsConsumed - 1;
+            let prefix = group[trackingIndex].tracking.substring(0, 2);
+            let isAR = isArService(prefix, currentBucket.fee);
             
-            // Format Tracking
-            let startStr = `${firstTrackingParts.prefix} ${String(trackingStartNum).padStart(9, '0').replace(/(\d{4})(\d{4})(\d{1})/, '$1 $2 $3')} TH`;
-            let endStr = `${firstTrackingParts.prefix} ${String(endNum).padStart(9, '0').replace(/(\d{4})(\d{4})(\d{1})/, '$1 $2 $3')} TH`;
+            // ถ้าเป็น AR 1 ชิ้นใช้ 2 เลข
+            let multiplier = isAR ? 2 : 1;
+            let maxItemsCanFulfill = Math.floor(remainingInGroup / multiplier);
+            
+            let consumeCount = Math.min(maxItemsCanFulfill, currentBucket.count);
+            
+            if (consumeCount === 0) {
+                // กลุ่ม Tracking นี้เหลือเลขไม่พอจะจับคู่แม้แต่ 1 ชิ้น (เช่นเหลือ 1 เลข แต่บริการเป็น AR ต้องการ 2)
+                break; 
+            }
+
+            let trackingSlotsConsumed = consumeCount * multiplier;
+            
+            let startItem = group[trackingIndex];
+            let endItem = group[trackingIndex + trackingSlotsConsumed - 1];
+            
+            let startStr = formatTracking(startItem.tracking);
+            let endStr = formatTracking(endItem.tracking);
             
             let displayStr = consumeCount === 1 ? startStr : `${startStr} ถึง ${endStr}`;
             
-            resultLines.push(`${displayStr.padEnd(45, ' ')} จำนวน ${consumeCount} ชิ้น*${currentBucket.fee} บาท เป็นเงิน ${(consumeCount * currentBucket.fee).toLocaleString()} บาท`);
+            resultLines.push(`${displayStr}\nจำนวน ${consumeCount} ชิ้น*${currentBucket.fee} บาท เป็นเงิน ${(consumeCount * currentBucket.fee).toLocaleString()} บาท`);
 
-            // อัปเดตยอดรวม
             totalItemsFinal += consumeCount;
             totalPriceFinal += (consumeCount * currentBucket.fee);
 
-            // หักลบจากถัง
             currentBucket.count -= consumeCount;
-            groupRemaining -= trackingSlotsConsumed; // ในโจทย์ปกติคือ 1:1 แต่ถ้า AR คือใช้ 2 เลขจากลิสต์
-            trackingStartNum = endNum + 1;
+            trackingIndex += trackingSlotsConsumed;
 
             if (currentBucket.count === 0) {
-                priceBuckets.shift(); // ถังว่างแล้ว ทิ้งไป
+                priceBuckets.shift();
             }
         }
     }
