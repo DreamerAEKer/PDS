@@ -12,44 +12,59 @@ export async function parseExcel(file) {
                 const worksheet = workbook.Sheets[firstSheetName];
                 const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
                 
-                // ค้นหาคอลัมน์ Tracking และ ค่าบริการ
-                let trackingColIdx = -1;
-                let feeColIdx = -1;
-                let headerRowIdx = -1;
-
-                // ค้นหาแถวที่เป็น Header ก่อน
-                for (let i = 0; i < Math.min(json.length, 10); i++) {
-                    const row = json[i];
-                    for (let j = 0; j < row.length; j++) {
-                        const cell = String(row[j] || '').toLowerCase();
-                        if (cell.includes('เลขที่ลงทะเบียน') || cell.includes('tracking') || cell.includes('เลขพัสดุ') || cell.includes('บาร์โค')) {
-                            trackingColIdx = j;
-                            headerRowIdx = i;
-                        }
-                        if (cell.includes('ค่าบริการ') || cell.includes('price') || cell.includes('ค่าส่ง') || cell.includes('ราคา')) {
-                            feeColIdx = j;
-                        }
-                    }
-                    if (trackingColIdx !== -1 && feeColIdx !== -1) break;
-                }
-
-                // ถ้าไม่เจอ Header ที่ชัดเจน ลองเดา (สมมติว่าคอลัมน์ 2 เป็น Tracking คอลัมน์สุดท้ายเป็นค่าบริการ)
-                if (trackingColIdx === -1) trackingColIdx = 1;
-                if (feeColIdx === -1) feeColIdx = 4; // กะคร่าวๆ
-                
                 const rawData = [];
-                for (let i = headerRowIdx + 1; i < json.length; i++) {
+                
+                // สแกนหาจาก "โครงสร้างข้อมูล" ในทุกๆ แถว แทนการอิงจากหัวคอลัมน์ (ตามที่คุณแนะนำ)
+                for (let i = 0; i < json.length; i++) {
                     const row = json[i];
                     if (!row || row.length === 0) continue;
                     
-                    const tracking = String(row[trackingColIdx] || '').replace(/\s+/g, '').toUpperCase();
-                    const fee = parseFloat(row[feeColIdx]);
+                    let foundTracking = null;
+                    let foundFee = null;
+                    
+                    for (let j = 0; j < row.length; j++) {
+                        const cellVal = row[j];
+                        if (cellVal === undefined || cellVal === null) continue;
+                        
+                        const cellStr = String(cellVal).replace(/\s+/g, '').toUpperCase();
+                        
+                        // 1. ตรวจจับเลข Tracking ด้วยโครงสร้าง (ตัวอักษร 2 + เลข 9 + TH)
+                        if (/^[A-Z]{2}\d{9}TH$/.test(cellStr)) {
+                            foundTracking = cellStr;
+                        } 
+                        // 2. ตรวจจับราคา (หาเซลล์ที่เป็นตัวเลขเพียวๆ)
+                        else if (typeof cellVal === 'number') {
+                            // เก็บตัวเลขแรกที่เจอ (หรือตัวเลขที่สมเหตุสมผลว่าเป็นราคา)
+                            if (foundFee === null) foundFee = cellVal;
+                        } 
+                        else if (typeof cellVal === 'string') {
+                            // ถ้าเป็น String ลองเช็คว่าเป็นตัวเลขเพียวๆ หรือไม่
+                            const trimmed = cellVal.trim();
+                            const parsed = parseFloat(trimmed);
+                            if (!isNaN(parsed) && trimmed === parsed.toString()) {
+                                if (foundFee === null) foundFee = parsed;
+                            }
+                        }
+                    }
+                    
+                    // ถ้าระบุ Tracking ได้ ถือว่าเป็น 1 รายการ
+                    if (foundTracking) {
+                        // ถ้าหาตัวเลขเพียวๆ ไม่เจอ ลองพยายามสกัดตัวเลขจากเซลล์อื่นๆ (เผื่อติดตัวอักษรเช่น "29 บาท")
+                        if (foundFee === null) {
+                            for (let j = 0; j < row.length; j++) {
+                                const cellVal = row[j];
+                                const parsed = parseFloat(cellVal);
+                                // หลีกเลี่ยงการดึงตัวเลขจาก ID ยาวๆ หรือเบอร์โทร
+                                if (!isNaN(parsed) && String(parsed).length < 8) { 
+                                    foundFee = parsed;
+                                    break;
+                                }
+                            }
+                        }
 
-                    // ตรวจสอบว่าเป็น Tracking ถูกต้องไหม (อย่างน้อยมีตัวอักษรและตัวเลข)
-                    if (tracking && tracking.length >= 10 && !isNaN(fee)) {
                         rawData.push({
-                            tracking: tracking,
-                            fee: fee
+                            tracking: foundTracking,
+                            fee: foundFee || 0 // ถ้าหาไม่เจอจริงๆ ให้เป็น 0 ไว้ก่อน
                         });
                     }
                 }
@@ -65,21 +80,16 @@ export async function parseExcel(file) {
 }
 
 // สำหรับรูปภาพและ PDF การดึงข้อมูลจริงอาจต้องใช้ Tesseract.js และ PDF.js
-// แต่ในเวอร์ชันต้นแบบ จะมีการใช้ RegExp สกัดจากข้อความจำลอง
 export async function extractTextWithRegex(text) {
     const rawData = [];
-    // แพทเทิร์นค้นหาเลข Tracking เช่น EQ 6878 7878 0 TH หรือ EQ687878780TH
     const trackingRegex = /([A-Za-z]{2})\s*(\d{4})\s*(\d{4})\s*(\d{1})\s*(TH)?/gi;
     let match;
-    let index = 1;
     while ((match = trackingRegex.exec(text)) !== null) {
         let tracking = `${match[1]}${match[2]}${match[3]}${match[4]}${match[5]||'TH'}`.toUpperCase();
-        // หาตัวเลขใกล้เคียงที่เป็นค่าบริการ (การทำจริงจะยากกว่านี้ ต้องผูกกับตาราง)
         rawData.push({
             tracking: tracking,
-            fee: 40 // ค่าเริ่มต้นจำลอง
+            fee: 40 
         });
-        index++;
     }
     return rawData;
 }
