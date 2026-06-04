@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Post Data Summarizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/style.css">
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>Data Summarizer</h1>
+        <p>อัปโหลดใบนำส่งเพื่อสรุปข้อมูล</p>
+      </header>
+
+      <main>
+        <section id="upload-section">
+          <div id="drop-zone" class="drop-zone">
+            <div class="icon">📄</div>
+            <p>ลากไฟล์มาวางที่นี่ หรือ <span>เลือกไฟล์</span></p>
+            <input type="file" id="file-input" accept=".xlsx,.xls,.pdf,.png,.jpg,.jpeg" multiple>
+          </div>
+          <div id="upload-status" class="status-msg hidden"></div>
+        </section>
+
+        <section id="data-section" class="hidden">
+          <div class="card">
+            <div class="card-header">
+              <h2>ข้อมูลดิบ (Raw Data)</h2>
+              <button id="btn-add-row" class="btn-sm">เพิ่มรายการ</button>
+            </div>
+            <div class="table-container">
+              <table id="raw-table">
+                <thead>
+                  <tr>
+                    <th>ลำดับ</th>
+                    <th>เลข Track</th>
+                    <th>ค่าบริการ</th>
+                    <th>ลบ</th>
+                  </tr>
+                </thead>
+                <tbody id="raw-tbody">
+                  <!-- Data rows -->
+                </tbody>
+              </table>
+            </div>
+            <div class="card-actions">
+              <button id="btn-summarize" class="btn-primary">สรุปข้อมูล (Summarize)</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="result-section" class="hidden">
+          <div class="card result-card">
+            <h2>ผลลัพธ์การสรุปข้อมูล</h2>
+            <div id="summary-content" class="summary-content">
+              <!-- Summary output -->
+            </div>
+            <div class="summary-totals">
+              <div class="total-box">
+                <span class="label">จำนวนรวม</span>
+                <span class="value" id="total-items">0 ชิ้น</span>
+              </div>
+              <div class="total-box">
+                <span class="label">ยอดเงินรวม</span>
+                <span class="value" id="total-price">0 บาท</span>
+              </div>
+            </div>
+            <button id="btn-copy" class="btn-secondary">คัดลอกผลลัพธ์</button>
+            <button id="btn-reset" class="btn-outline">เริ่มใหม่</button>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
