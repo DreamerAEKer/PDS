@@ -108,8 +108,16 @@ document.addEventListener('DOMContentLoaded', () => {
         summary.lines.forEach((item) => {
             const row = document.createElement('div');
             row.className = 'summary-item';
+            
+            let trackingHtml = `<div class="summary-tracking-start">${item.startStr}</div>`;
+            if (item.endStr) {
+                trackingHtml += `<div class="summary-tracking-end">ถึง ${item.endStr}</div>`;
+            }
+
             row.innerHTML = `
-                <div class="summary-tracking">${item.displayStr}</div>
+                <div class="summary-tracking-container">
+                    ${trackingHtml}
+                </div>
                 <div class="summary-details">
                     <span class="badge">จำนวน ${item.consumeCount} ชิ้น</span>
                     <span class="badge fee-badge">@ ${item.fee} บาท</span>
@@ -117,7 +125,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
             contentDiv.appendChild(row);
-            plainTextArr.push(`${item.displayStr}\nจำนวน ${item.consumeCount} ชิ้น*${item.fee} บาท เป็นเงิน ${item.amount.toLocaleString()} บาท`);
+            
+            let plainTextTracking = item.endStr ? `${item.startStr} ถึง ${item.endStr}` : item.startStr;
+            plainTextArr.push(`${plainTextTracking}\nจำนวน ${item.consumeCount} ชิ้น*${item.fee} บาท เป็นเงิน ${item.amount.toLocaleString()} บาท`);
         });
         
         contentDiv.dataset.plainText = plainTextArr.join('\n');

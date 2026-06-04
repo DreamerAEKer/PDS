@@ -98,10 +98,9 @@ export function summarizeData(rawData) {
             let startStr = formatTracking(startItem.tracking);
             let endStr = formatTracking(endItem.tracking);
             
-            let displayStr = consumeCount === 1 ? startStr : `${startStr} ถึง ${endStr}`;
-            
             resultLines.push({
-                displayStr: displayStr,
+                startStr: startStr,
+                endStr: consumeCount === 1 ? null : endStr,
                 consumeCount: consumeCount,
                 fee: currentBucket.fee,
                 amount: consumeCount * currentBucket.fee
